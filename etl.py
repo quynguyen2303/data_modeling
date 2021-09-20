@@ -14,9 +14,9 @@ def insert_record(cur, insert_query, df, fields):
     :param df: dataframe with the record.
     :param fields: array of fields of the data to insert.
     """
-#     print(df[fields].values)
-    cur.execute(insert_query, df[fields].values[0].tolist())
-#     conn.commit()
+    # df[fields].values is still a df, and df[fields].values[0] is a numpy array, need to convert it to list of string for query
+    record = df[fields].values[0].tolist()
+    cur.execute(insert_query, record)
 
 def insert_dataframe(cur, df, insert_query):
     """
@@ -25,10 +25,9 @@ def insert_dataframe(cur, df, insert_query):
     :param df: dataframe with the record.
     :param insert_query: query SQL for Insert.
     """
+#     print("new way to insert df")
     for i, row in df.iterrows():
-        cur.execute(insert_query, row.values)
-#         conn.commit()
-
+        cur.execute(insert_query, list(row)) # convert row values to list for query
 
 def process_song_file(cur, filepath):
     """
@@ -39,13 +38,14 @@ def process_song_file(cur, filepath):
     
     # open song file
     df = pd.read_json(filepath, lines=True)
-    song_fields = ['song_id', 'title', 'artist_id', 'year', 'duration']
-    artist_fields = ['artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude']
+    
     # insert song record
+    song_fields = ['song_id', 'title', 'artist_id', 'year', 'duration']
     insert_record(cur, song_table_insert, df, song_fields)
+                  
     # insert artist record
+    artist_fields = ['artist_id', 'artist_name', 'artist_location', 'artist_latitude', 'artist_longitude']
     insert_record(cur, artist_table_insert, df, artist_fields)
-
 
 def expand_time_data(df, ts_field):
     """
@@ -59,7 +59,7 @@ def expand_time_data(df, ts_field):
     df['day'] = df[ts_field].dt.day
     df['hour'] = df[ts_field].dt.hour
     df['weekday_name'] = df[ts_field].dt.strftime('%A')
-    df['week'] = df[ts_field].dt.week
+    df['week'] = df[ts_field].dt.isocalendar().week
     
     return df
 
@@ -75,7 +75,10 @@ def get_songid_artistid(cur, song, artist, length):
     """
 
     # get songid and artistid from song and artist tables
-    results = cur.execute(song_select, (song, artist, length))
+    cur.execute(song_select, (song, artist, length))
+    
+    results = cur.fetchone()
+#     print(results)
     song_id, artist_id = results if results else None, None
     return song_id, artist_id
 
@@ -87,7 +90,11 @@ def insert_facts_songplays(cur, df):
     """
 
     # insert songplay records
-    insert_dataframe(cur, df, songplay_table_insert) 
+    for i, row in df.iterrows():
+        songid, artistid = get_songid_artistid(cur, row['song'], row['artist'], row['length'])
+        songplay_data = (row.ts, row.userId, row.level, songid, artistid,
+                         row.itemInSession, row.location, row.userAgent)
+        cur.execute(songplay_table_insert, songplay_data)
 
 
 def process_log_file(cur, filepath):
@@ -105,19 +112,15 @@ def process_log_file(cur, filepath):
     # convert timestamp column to datetime
     df['datetime'] = pd.to_datetime(df['ts'], unit='ms')
     # insert time data records
-    time_data = expand_time_data(df, 'datetime')
+    df = expand_time_data(df, 'datetime')
+    time_data = df[['ts', 'hour', 'day', 'week', 'month', 'year', 'weekday_name']]
     insert_dataframe(cur, time_data, time_table_insert)
     # load user table
     user_df = df[['userId', 'firstName', 'lastName', 'gender', 'level']]
     # insert user records
     insert_dataframe(cur, user_df, user_table_insert)
-    # insert songplay records
-    for i, row in df.iterrows():
-        results = get_songid_artistid(cur, row['song'], row['artist'], row['length'])
-        df['songid'] = results[0]
-        df['artistid'] = results[1]
-        
-    insert_facts_songplays(cur, df[['ts', 'userId', 'level', 'songid', 'artistid', 'itemInSession', 'location', 'userAgent']])
+    # insert songplay records     
+    insert_facts_songplays(cur, df)
     
 def get_all_files_matching_from_directory(directorypath, match):
     """
@@ -144,16 +147,19 @@ def process_data(cur, conn, filepath, func):
     """
     # get total number of files found
     all_files = get_all_files_matching_from_directory(filepath, '*.json')
-                           
+    print('There are total %s files found in %s' % (str(len(all_files)), filepath))
+   
     # iterate over files and process
 #     conn.
-    for f in all_files:
+    for i, f in enumerate(all_files, 1):
         func(cur, f)
+        conn.commit()
+        print('{}/{} files have been processed.'.format(i, len(all_files)))
                            
 def main():
     #conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=student password=student")
     conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=postgres password=123456")
-    conn.set_session(autocommit=True)
+#     conn.set_session(autocommit=True)
     cur = conn.cursor()
 
     process_data(cur, conn, filepath='data/song_data', func=process_song_file)

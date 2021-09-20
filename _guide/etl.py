@@ -60,8 +60,8 @@ def expand_time_data(df, ts_field):
     t['month'] = t['datetime'].dt.month
     t['day'] = t['datetime'].dt.day
     t['hour'] = t['datetime'].dt.hour
-    t['weekday_name'] = t['datetime'].dt.weekday_name
-    t['week'] = t['datetime'].dt.week
+    t['weekday_name'] = t['datetime'].dt.strftime('%A')
+    t['week'] = t['datetime'].dt.isocalendar().week
 
     return t
 
@@ -178,7 +178,7 @@ def process_data(cur, conn, filepath, func):
 
 def main():
     #conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=student password=student")
-    conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=postgres password=postgres")
+    conn = psycopg2.connect("host=127.0.0.1 dbname=sparkifydb user=postgres password=123456")
     cur = conn.cursor()
 
     process_data(cur, conn, filepath='data/song_data', func=process_song_file)
