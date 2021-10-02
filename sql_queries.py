@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS time
     weekday varchar)
 """)
 
+
 # INSERT RECORDS
 
 songplay_table_insert = ("""
@@ -105,6 +106,8 @@ WHERE s.title = %s AND a.name = %s AND s.duration = %s
 
 # QUERY LISTS
 
-create_table_queries = [songplay_table_create, user_table_create, song_table_create,
-                        artist_table_create, time_table_create]
+# create_table_queries = [songplay_table_create, user_table_create, song_table_create,
+#                         artist_table_create, time_table_create]
+
+
 drop_table_queries = [songplays_table_drop, users_table_drop, songs_table_drop, artists_table_drop, time_table_drop]
